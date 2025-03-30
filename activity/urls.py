@@ -19,7 +19,11 @@ urlpatterns = [
 
     # Dashboard
     path("", views.Dashboard, name="dashboard"),
+    path('available/', views.available_rooms, name="available"),
     path('calendar/', views.calendar_view, name="calendar"),
+    path('reserve_spot/', views.reserve_spot, name="reserve_spot"),
+    path('reservation_room/<str:pk>', views.reservations_by_room, name="reservation_room"),
+    path('reservation_history/', views.reservations_history, name="reservation_history"),
 
     # Email Verification
     path("verify_email/<str:verification_code>", views.VerifyEmail, name="verify_email"),

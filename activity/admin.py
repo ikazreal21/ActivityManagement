@@ -11,7 +11,8 @@ from admin_interface.models import Theme
 admin.site.unregister(Group)
 # admin.site.unregister(Theme)
 # admin.site.register()
-admin.site.register(Extracurricular)
+admin.site.register(EventPlace)
+admin.site.register(Reservation)
 admin.site.register(Profile)
 
 

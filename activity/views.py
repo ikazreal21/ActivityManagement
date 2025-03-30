@@ -42,6 +42,20 @@ import pytz
 # def LandingPage(request):
 #     return render(request, 'activity/landing.html')
 
+def get_remaining_time(reservation):
+    """Returns the remaining time in seconds until the parking reservation ends."""
+    user_timezone = pytz.timezone('Asia/Manila')  # Adjust to your timezone
+    current_time = localtime(now(), user_timezone).replace(tzinfo=None)
+
+    print(current_time)
+
+    if reservation.reservation_end_time:
+        print(reservation.get_local_end_time().replace(tzinfo=None))
+        print(reservation.get_local_end_time().replace(tzinfo=None) > current_time)
+        if reservation.get_local_end_time().replace(tzinfo=None) > current_time:
+            remaining_time = reservation.get_local_end_time().replace(tzinfo=None) - current_time
+            return remaining_time.total_seconds()  # Return seconds remaining
+    return 0
 
 def Login(request):
     if request.user.is_authenticated:
@@ -130,6 +144,79 @@ def Dashboard(request):
 @login_required(login_url='login')
 def calendar_view(request):
     return render(request, 'activity/calendar.html')
+
+@login_required(login_url='login')
+def available_rooms(request):
+    spots = EventPlace.objects.all()
+    # print(request.get_host())
+    return render(request, 'activity/available_room.html', {'spots': spots})
+
+
+@login_required(login_url='login')
+def reserve_spot(request):
+    spots = EventPlace.objects.filter(is_reserved=False, is_occupied=False)
+
+    if request.method == 'POST':
+        room_id = request.POST['room_id']
+        start_time = make_aware(datetime.strptime(request.POST['start_time'], "%Y-%m-%dT%H:%M"))
+        end_time = make_aware(datetime.strptime(request.POST['end_time'], "%Y-%m-%dT%H:%M"))
+        purpose = request.POST['purpose']
+        faculty = request.POST['faculty']
+
+        spot = get_object_or_404(EventPlace, id=room_id)
+
+        # Check if the spot is already occupied
+        if spot.is_occupied:
+            messages.info(request, 'Room is already reserved or occupied')
+            return redirect('available')
+        # Check for overlapping reservations
+        existing_reservations = Reservation.objects.filter(
+            room=spot,
+            end_time__gt=start_time,  # Ends after the new start time
+            start_time__lt=end_time    # Starts before the new end time
+        )
+
+        if existing_reservations.exists():
+            messages.info(request, 'Room is already reserved or occupied')
+            return redirect('available')
+
+        # Create the reservation with status "Pending"
+        reservation = Reservation.objects.create(
+            user=request.user,
+            room=spot,
+            faculty=faculty,
+            purpose=purpose,
+            start_time=start_time,
+            end_time=end_time,
+            status="pending"  # Set initial status
+        )
+
+        spot.is_reserved = True
+        spot.save()
+
+    # Fetch available spots
+    return redirect('available')
+
+
+@login_required(login_url='login')
+def reservations_by_room(request, pk):
+    spot_obj = EventPlace.objects.get(id=pk)
+    reservations = Reservation.objects.filter(room=spot_obj, status__in=["approved", "done"]).order_by('start_time')
+
+    remaining_seconds = get_remaining_time(spot_obj)
+
+    print(remaining_seconds)
+
+    context = {'reservations': reservations, 'spot': spot_obj,  'remaining_seconds': remaining_seconds}
+    return render(request, 'activity/reservations_by_room.html', context)
+
+# Reservation views
+@login_required(login_url='login')
+def reservations_history(request):
+    reservations = Reservation.objects.filter(user=request.user, status__in=["approved", "done"])
+    # for i in reservations:
+    #     print(i.user.email)
+    return render(request, 'activity/reservation_history.html', {'reservations': reservations})
 
 # Email Verification
 def VerifyEmail(request, verification_code):

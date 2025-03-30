@@ -30,20 +30,72 @@ class Profile(models.Model):
         return f"{self.first_name} {self.last_name}"
 
 
-class Extracurricular(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+class EventPlace(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    room_number = models.IntegerField()
     name = models.CharField(max_length=255)
-    description = models.TextField()
-    start_date = models.DateField()
-    end_date = models.DateField()
-    location = models.CharField(max_length=255)
-    time = models.TimeField()
-    duration = models.DurationField()
-    is_active = models.BooleanField(default=True)
-
-    
-    class Meta:
-        verbose_name_plural = "Extracurriculars"
+    is_reserved = models.BooleanField(default=False)
+    is_occupied = models.BooleanField(default=False)
+    reservation_end_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.name} {self.start_date} {self.end_date} {self.time} {self.duration}"
+        return f"{self.name} - {str(self.room_number)}"
+    
+    def get_room_number(self):
+        return self.room_number
+    
+    def get_local_end_time(self):
+        """ Get start_time in Asia/Manila timezone without saving """
+        manila_tz = pytz.timezone('Asia/Manila')
+        return self.reservation_end_time.astimezone(manila_tz) if self.reservation_end_time else None
+
+    class Meta:
+        verbose_name_plural = "Events Places"
+
+
+class Reservation(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('ongoing', 'Ongoing'),
+        ('done', 'Done')
+    ]
+
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    room = models.ForeignKey(EventPlace, on_delete=models.CASCADE)
+    faculty = models.CharField(max_length=255, blank=True, null=True)
+    purpose = models.TextField(blank=True, null=True)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+
+    def get_local_start_time(self):
+        """ Get start_time in Asia/Manila timezone without saving """
+        manila_tz = pytz.timezone('Asia/Manila')
+        return self.start_time.astimezone(manila_tz) if self.start_time else None
+
+    def get_local_end_time(self):
+        """ Get end_time in Asia/Manila timezone without saving """
+        manila_tz = pytz.timezone('Asia/Manila')
+        return self.end_time.astimezone(manila_tz) if self.end_time else None
+    
+    def update_status(self):
+        """ Update the status based on the current time """
+        current_time = now()
+        if self.start_time <= current_time < self.end_time:
+            self.status = 'parked'
+        elif current_time >= self.end_time:
+            self.status = 'expired'
+        self.save()
+
+    def __str__(self):
+        return str(self.user) + " " + str(self.room) + " " + str(self.start_time) + " " + str(self.end_time)
+    
+        
+    class Meta:
+        verbose_name_plural = "Reservations"
+        ordering = ['-start_time']
+
